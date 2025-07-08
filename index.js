@@ -34,11 +34,15 @@ async function run() {
         //DB AND COLLECTIONS
         const db = client.db('hallPointDB');
         const usersCollection = db.collection('users');
+        const mealsCollection = db.collection('meals')
 
 
 
 
+        //****************************************/
         //*******    User Related Api     ********/
+        //****************************************/
+
         app.get('/users', async (req, res) => {
             const result = await usersCollection.find().toArray();
             res.send(result)
@@ -57,6 +61,59 @@ async function run() {
             const result = await usersCollection.insertOne(user);
             res.send(result)
         })
+
+
+        //****************************************/
+        //*******    Meals Related Api     ********/
+        //****************************************/
+
+        app.get('/meals', async (req, res) => {
+            const page = parseInt(req.query.page) || 0;
+            const limit = parseInt(req.query.limit) || 6;
+            const search = req.query.search || '';
+            const category = req.query.category || '';
+            const priceRange = req.query.priceRange || '';
+
+            const query = {};
+
+            if (search) {
+                query.title = { $regex: search, $options: 'i' };
+            }
+
+            if (category) {
+                query.category = category;
+            }
+
+            if (priceRange) {
+                const [min, max] = priceRange.split('-').map(Number);
+                query.price = { $gte: min, $lte: max };
+            }
+
+            try {
+                const total = await mealsCollection.countDocuments(query);
+                const meals = await mealsCollection.find(query)
+                    .skip(page * limit)
+                    .limit(limit)
+                    .toArray();
+
+                res.send({
+                    meals,
+                    hasMore: (page + 1) * limit < total,
+                });
+            } catch (err) {
+                console.error(err);
+                res.status(500).send({ message: 'Error fetching meals' });
+            }
+        });
+
+        app.post('/meals', async (req, res) => {
+            const meal = req.body;
+            const result = await mealsCollection.insertOne(meal);
+            res.send(result)
+        })
+
+
+
 
 
 
