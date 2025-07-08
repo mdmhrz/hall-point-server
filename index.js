@@ -34,7 +34,8 @@ async function run() {
         //DB AND COLLECTIONS
         const db = client.db('hallPointDB');
         const usersCollection = db.collection('users');
-        const mealsCollection = db.collection('meals')
+        const mealsCollection = db.collection('meals');
+        const reviewsCollection = db.collection("reviews");
 
 
 
@@ -66,6 +67,8 @@ async function run() {
         //****************************************/
         //*******    Meals Related Api     ********/
         //****************************************/
+
+        // app.get('/meals/all')
 
         app.get('/meals', async (req, res) => {
             const page = parseInt(req.query.page) || 0;
@@ -106,11 +109,90 @@ async function run() {
             }
         });
 
+
+        //to get meal data by id
+        // GET Meal by ID
+        app.get("/meals/:id", async (req, res) => {
+            const { id } = req.params;
+
+            try {
+                const query = { _id: new ObjectId(id) };
+                const meal = await mealsCollection.findOne(query);
+
+                if (!meal) {
+                    return res.status(404).send({ message: "Meal not found" });
+                }
+
+                res.send(meal);
+            } catch (err) {
+                res.status(500).send({ message: "Invalid meal ID", error: err.message });
+            }
+        });
+
+
+        //To create new meal data
         app.post('/meals', async (req, res) => {
             const meal = req.body;
             const result = await mealsCollection.insertOne(meal);
             res.send(result)
-        })
+        });
+
+
+        //Create Reviews for meal and count review for meal
+        app.post("/meals/:id/reviews", async (req, res) => {
+            const mealId = req.params.id;
+            const { user, email, comment, rating } = req.body;
+
+            if (!user || !email || !comment || rating == null) {
+                return res.status(400).send({ message: "Missing review fields" });
+            }
+
+            try {
+                const review = {
+                    mealId: new ObjectId(mealId),
+                    user,
+                    email,
+                    comment,
+                    rating: parseInt(rating),
+                    date: new Date().toISOString(),
+                };
+
+                const result = await reviewsCollection.insertOne(review);
+
+                // Update review count in mealsCollection
+                await mealsCollection.updateOne(
+                    { _id: new ObjectId(mealId) },
+                    { $inc: { reviews_count: 1, rating: 1 } }
+                );
+
+                res.send({ success: true, message: "Review added", result });
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to post review", error: error.message });
+            }
+        });
+
+
+        // PATCH: Increment like count
+        app.patch("/meals/:id/like", async (req, res) => {
+            const { id } = req.params;
+
+            try {
+                const filter = { _id: new ObjectId(id) };
+                const update = {
+                    $inc: { likes: 1 },
+                };
+
+                const result = await mealsCollection.updateOne(filter, update);
+
+                if (result.modifiedCount === 0) {
+                    return res.status(404).send({ message: "Meal not found or already liked" });
+                }
+
+                res.send({ message: "Like updated", result });
+            } catch (error) {
+                res.status(500).send({ message: "Failed to update like count", error: error.message });
+            }
+        });
 
 
 
