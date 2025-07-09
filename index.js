@@ -465,24 +465,41 @@ async function run() {
         // update like count
 
         app.patch("/upcoming-meals/like/:id", async (req, res) => {
-            try {
-                const mealId = req.params.id;
+            const mealId = req.params.id;
+            const userEmail = req.body.email;
 
+            if (!userEmail) {
+                return res.status(400).send({ success: false, message: "User email is required" });
+            }
+
+            try {
+                const meal = await upcomingMealsCollection.findOne({ _id: new ObjectId(mealId) });
+
+                if (!meal) {
+                    return res.status(404).send({ success: false, message: "Meal not found" });
+                }
+
+                // Check if user already liked it
+                if (meal.liked_by?.includes(userEmail)) {
+                    return res.status(400).send({ success: false, message: "You already liked this meal" });
+                }
+
+                // Add like and track user
                 const result = await upcomingMealsCollection.updateOne(
                     { _id: new ObjectId(mealId) },
-                    { $inc: { likes: 1 } }
+                    {
+                        $inc: { likes: 1 },
+                        $addToSet: { liked_by: userEmail }
+                    }
                 );
 
-                if (result.modifiedCount > 0) {
-                    res.send({ success: true, message: "Like added!" });
-                } else {
-                    res.status(404).send({ success: false, message: "Meal not found or like not updated." });
-                }
+                res.send({ success: true, message: "Liked successfully", result });
             } catch (error) {
-                console.error("Error in PATCH /upcoming-meals/like/:id", error);
+                console.error("Like failed:", error);
                 res.status(500).send({ success: false, message: "Internal Server Error" });
             }
         });
+
 
 
 
