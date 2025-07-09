@@ -38,6 +38,7 @@ async function run() {
         const mealRequestsCollection = db.collection('mealRequests');
         const reviewsCollection = db.collection("reviews");
         const paymentsCollection = db.collection("payments");
+        const upcomingMealsCollection = db.collection("upcomingMeals");
 
 
         // payment 
@@ -139,7 +140,27 @@ async function run() {
             }
         });
 
+        // GET user role by email
+        app.get("/users/role", async (req, res) => {
+            try {
+                const email = req.query.email;
 
+                if (!email) {
+                    return res.status(400).json({ error: "Email query parameter is required" });
+                }
+
+                const user = await usersCollection.findOne({ email });
+
+                if (!user) {
+                    return res.status(404).json({ error: "User not found" });
+                }
+
+                res.json({ role: user.role || "user" }); // fallback if role not set
+            } catch (error) {
+                console.error("Error fetching user role:", error);
+                res.status(500).json({ error: "Internal server error" });
+            }
+        });
 
 
 
@@ -376,6 +397,91 @@ async function run() {
 
             const result = await mealRequestsCollection.insertOne(request);
             res.send(result);
+        });
+
+
+        //****************************************/
+        //*******    Upcoming Meals Related Api     ********/
+        //****************************************/
+
+        //Get all upcoming meals
+
+        app.get("/upcoming-meals", async (req, res) => {
+            try {
+                const upcomingMeals = await upcomingMealsCollection.find().toArray();
+                res.status(200).json(upcomingMeals);
+            } catch (error) {
+                console.error("Failed to fetch upcoming meals:", error);
+                res.status(500).json({ message: "Server error while fetching upcoming meals" });
+            }
+        });
+
+        //Get upcoming meals sorted by likes count
+
+        app.get("/upcoming-meals/sorted", async (req, res) => {
+            try {
+                const upcomingMeals = await upcomingMealsCollection
+                    .find({ status: "upcoming" }) // optional if you store status
+                    .sort({ likes: -1 })          // sort by likes descending
+                    .toArray();
+
+                res.status(200).json(upcomingMeals);
+            } catch (error) {
+                console.error("Failed to fetch sorted upcoming meals:", error);
+                res.status(500).json({ message: "Server error while fetching meals" });
+            }
+        });
+
+
+        // new upcoming meals post
+        app.post("/upcoming-meals", async (req, res) => {
+            try {
+                const mealData = req.body;
+
+                // Optional: validate required fields
+                const requiredFields = ["title", "category", "cuisine", "image", "ingredients", "description", "price", "prep_time", "distributor_name", "distributor_email"];
+                const isValid = requiredFields.every(field => mealData[field] !== undefined && mealData[field] !== null);
+
+                if (!isValid) {
+                    return res.status(400).json({ message: "Missing required fields" });
+                }
+
+                // Add extra metadata if needed
+                mealData.status = "upcoming";
+                mealData.rating = 0;
+                mealData.likes = 0;
+                mealData.reviews_count = 0;
+                mealData.posted_at = new Date().toISOString();
+
+                const result = await upcomingMealsCollection.insertOne(mealData);
+                res.status(201).json({ insertedId: result.insertedId });
+            } catch (error) {
+                console.error("Failed to add upcoming meal:", error);
+                res.status(500).json({ message: "Server error while adding upcoming meal" });
+            }
+        });
+
+
+        // update like count
+
+        app.patch("/upcoming-meals/like/:id", async (req, res) => {
+            try {
+                const mealId = req.params.id;
+
+                const result = await upcomingMealsCollection.updateOne(
+                    { _id: new ObjectId(mealId) },
+                    { $inc: { likes: 1 } }
+                );
+
+                if (result.modifiedCount > 0) {
+                    res.send({ success: true, message: "Like added!" });
+                } else {
+                    res.status(404).send({ success: false, message: "Meal not found or like not updated." });
+                }
+            } catch (error) {
+                console.error("Error in PATCH /upcoming-meals/like/:id", error);
+                res.status(500).send({ success: false, message: "Internal Server Error" });
+            }
         });
 
 
