@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 // const admin = require("firebase-admin");
 
 
@@ -36,8 +36,63 @@ async function run() {
         const usersCollection = db.collection('users');
         const mealsCollection = db.collection('meals');
         const reviewsCollection = db.collection("reviews");
+        const paymentsCollection = db.collection("payments");
 
 
+        // payment 
+
+        // for payment confirmation from stripe
+        app.post('/create-payment-intent', async (req, res) => {
+            const amountInCents = req.body.amountInCents;
+
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amountInCents, // Stripe works in cents
+                currency: 'usd', // or 'bdt' if applicable for test
+                payment_method_types: ['card'],
+            });
+
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        });
+
+
+        //Post api for payments and update parcels collection payment status
+        app.post('/payments', async (req, res) => {
+            const { name, email, amount, paymentMethod, transactionId, badge } = req.body;
+
+
+
+            // Step 1: Change User Badge
+            const updateResult = await usersCollection.updateOne(
+                { email: email },
+                {
+                    $set: {
+                        badge: badge
+                    }
+                }
+            );
+
+
+            // Step 2: Save payment history
+            const paymentEntry = {
+                name,
+                email, // user email
+                amount,
+                paymentMethod,
+                transactionId,
+                paid_at: new Date(),
+                paid_at_string: new Date().toISOString(),
+                paid_for: badge
+            };
+
+            const insertResult = await paymentsCollection.insertOne(paymentEntry);
+
+            res.send({
+                message: 'Payment recorder and user membership badge changed',
+                insertdId: insertResult.insertedId
+            });
+        });
 
 
         //****************************************/
@@ -191,6 +246,24 @@ async function run() {
                 res.send({ message: "Like updated", result });
             } catch (error) {
                 res.status(500).send({ message: "Failed to update like count", error: error.message });
+            }
+        });
+
+
+        //Get Reviews by Meal Id
+        app.get("/meals/:id/reviews", async (req, res) => {
+            const mealId = req.params.id;
+
+            try {
+                const reviews = await reviewsCollection
+                    .find({ mealId: new ObjectId(mealId) })
+                    .sort({ date: -1 }) // optional: show latest first
+                    .toArray();
+
+                res.send(reviews);
+            } catch (error) {
+                console.error("Failed to fetch reviews:", error);
+                res.status(500).send({ message: "Server error fetching reviews", error: error.message });
             }
         });
 
