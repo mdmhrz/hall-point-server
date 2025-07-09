@@ -35,6 +35,7 @@ async function run() {
         const db = client.db('hallPointDB');
         const usersCollection = db.collection('users');
         const mealsCollection = db.collection('meals');
+        const mealRequestsCollection = db.collection('mealRequests');
         const reviewsCollection = db.collection("reviews");
         const paymentsCollection = db.collection("payments");
 
@@ -99,10 +100,23 @@ async function run() {
         //*******    User Related Api     ********/
         //****************************************/
 
+        //get specific user by email
+        app.get('/users', async (req, res) => {
+            const email = req.query.email;
+            const result = await usersCollection.findOne({ email });
+            res.send(result)
+        })
+
+
+        //to get all users
         app.get('/users', async (req, res) => {
             const result = await usersCollection.find().toArray();
             res.send(result)
         })
+
+
+
+
 
         //Add user in User Collection when a user register
         app.post('/users', async (req, res) => {
@@ -185,6 +199,25 @@ async function run() {
         });
 
 
+        //Get Reviews by Meal Id
+        app.get("/meals/:id/reviews", async (req, res) => {
+            const mealId = req.params.id;
+
+            try {
+                const reviews = await reviewsCollection
+                    .find({ mealId: new ObjectId(mealId) })
+                    .sort({ date: -1 }) // optional: show latest first
+                    .toArray();
+
+                res.send(reviews);
+            } catch (error) {
+                console.error("Failed to fetch reviews:", error);
+                res.status(500).send({ message: "Server error fetching reviews", error: error.message });
+            }
+        });
+
+
+
         //To create new meal data
         app.post('/meals', async (req, res) => {
             const meal = req.body;
@@ -250,22 +283,39 @@ async function run() {
         });
 
 
-        //Get Reviews by Meal Id
-        app.get("/meals/:id/reviews", async (req, res) => {
-            const mealId = req.params.id;
 
-            try {
-                const reviews = await reviewsCollection
-                    .find({ mealId: new ObjectId(mealId) })
-                    .sort({ date: -1 }) // optional: show latest first
-                    .toArray();
 
-                res.send(reviews);
-            } catch (error) {
-                console.error("Failed to fetch reviews:", error);
-                res.status(500).send({ message: "Server error fetching reviews", error: error.message });
-            }
+        //****************************************/
+        //*******    Meal Request Related Api     ********/
+        //****************************************/
+
+
+        // GET /meal-requests?mealId=xxx&userEmail=yyy
+        app.get('/meal-requests', async (req, res) => {
+            const { mealId, userEmail } = req.query;
+
+            const exists = await mealRequestsCollection.findOne({ mealId, userEmail });
+
+            res.send({ exists: !!exists });
         });
+
+
+        // POST /meal-requests
+        app.post('/meal-requests', async (req, res) => {
+            const request = req.body;
+            const exists = await mealRequestsCollection.findOne({
+                mealId: request.mealId,
+                userEmail: request.userEmail,
+            });
+
+            if (exists) {
+                return res.status(400).send({ message: "Already requested" });
+            }
+
+            const result = await mealRequestsCollection.insertOne(request);
+            res.send(result);
+        });
+
 
 
 
