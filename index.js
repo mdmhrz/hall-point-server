@@ -109,10 +109,35 @@ async function run() {
 
 
         //to get all users
-        app.get('/users', async (req, res) => {
+        app.get('/users/all', async (req, res) => {
             const result = await usersCollection.find().toArray();
             res.send(result)
         })
+
+        // GET /users/search?keyword=xyz
+        app.get("/users/search", async (req, res) => {
+            try {
+                const keyword = req.query.keyword?.trim();
+
+                if (!keyword) {
+                    return res.status(400).json({ message: "Search keyword is required." });
+                }
+
+                const regex = new RegExp(keyword, "i"); // "i" = case-insensitive
+
+                const users = await usersCollection.find({
+                    $or: [
+                        { name: { $regex: regex } },
+                        { email: { $regex: regex } },
+                    ],
+                }).toArray(); // Exclude sensitive fields
+
+                res.status(200).json(users);
+            } catch (error) {
+                console.error("Search error:", error);
+                res.status(500).json({ message: "Server error" });
+            }
+        });
 
 
 
@@ -131,6 +156,35 @@ async function run() {
             const result = await usersCollection.insertOne(user);
             res.send(result)
         })
+
+
+        // PATCH: Update user role
+        app.patch("/users/update-role/:id", async (req, res) => {
+            try {
+                const userId = req.params.id;
+                const { role } = req.body;
+
+                console.log(role);
+
+                if (!role || !["admin", "user"].includes(role)) {
+                    return res.status(400).json({ message: "Invalid or missing role." });
+                }
+
+                const result = await usersCollection.updateOne(
+                    { _id: new ObjectId(userId) },
+                    { $set: { role } }
+                );
+
+                if (result.modifiedCount === 0) {
+                    return res.status(404).json({ message: "User not found or role unchanged." });
+                }
+
+                res.json({ message: "User role updated successfully", updatedId: userId });
+            } catch (error) {
+                console.error("Error updating user role:", error);
+                res.status(500).json({ message: "Internal server error" });
+            }
+        });
 
 
 
