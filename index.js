@@ -133,6 +133,8 @@ async function run() {
         })
 
 
+
+
         //****************************************/
         //*******    Meals Related Api     ********/
         //****************************************/
@@ -177,6 +179,12 @@ async function run() {
                 res.status(500).send({ message: 'Error fetching meals' });
             }
         });
+
+        // get all meal without filtering
+        app.get('/meals/all', async (req, res) => {
+            const result = await mealsCollection.find().toArray();
+            res.send(result)
+        })
 
 
         //to get meal data by id
