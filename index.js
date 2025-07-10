@@ -304,6 +304,7 @@ async function run() {
         //To create new meal data
         app.post('/meals', async (req, res) => {
             const meal = req.body;
+            console.log(meal);
             const result = await mealsCollection.insertOne(meal);
             res.send(result)
         });
@@ -421,7 +422,7 @@ async function run() {
         app.get("/upcoming-meals/sorted", async (req, res) => {
             try {
                 const upcomingMeals = await upcomingMealsCollection
-                    .find({ status: "upcoming" }) // optional if you store status
+                    .find()
                     .sort({ likes: -1 })          // sort by likes descending
                     .toArray();
 
@@ -497,6 +498,23 @@ async function run() {
             } catch (error) {
                 console.error("Like failed:", error);
                 res.status(500).send({ success: false, message: "Internal Server Error" });
+            }
+        });
+
+
+        //Delete upcoming meals when its being published
+        // DELETE /upcoming-meals/:id
+        app.delete('/upcoming-meals/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const query = { _id: new ObjectId(id) };
+                console.log(query);
+
+                const result = await upcomingMealsCollection.deleteOne(query);
+                res.send(result);
+            } catch (error) {
+                console.error('Error deleting upcoming meal:', error);
+                res.status(500).send({ message: 'Failed to delete upcoming meal.' });
             }
         });
 
