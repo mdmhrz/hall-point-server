@@ -298,22 +298,7 @@ async function run() {
         });
 
 
-        //Get Reviews by Meal Id
-        app.get("/meals/:id/reviews", async (req, res) => {
-            const mealId = req.params.id;
 
-            try {
-                const reviews = await reviewsCollection
-                    .find({ mealId: new ObjectId(mealId) })
-                    .sort({ date: -1 }) // optional: show latest first
-                    .toArray();
-
-                res.send(reviews);
-            } catch (error) {
-                console.error("Failed to fetch reviews:", error);
-                res.status(500).send({ message: "Server error fetching reviews", error: error.message });
-            }
-        });
 
         // get distributor meals by distributor email 
         app.get('/meals/distributor/:email', async (req, res) => {
@@ -343,10 +328,47 @@ async function run() {
         });
 
 
+
+
+
+        //****************************************/
+        //*******    Review of meals Related Api     ********/
+        //****************************************/
+
+        // get all review in an array
+        app.get('/reviews', async (req, res) => {
+            try {
+                const reviews = await reviewsCollection.find().toArray();
+                res.send(reviews);
+            } catch (error) {
+                console.error("Failed to fetch reviews:", error);
+                res.status(500).send({ message: "Internal server error" });
+            }
+        });
+
+
+        //Get Reviews by Meal Id
+        app.get("/meals/:id/reviews", async (req, res) => {
+            const mealId = req.params.id;
+
+            try {
+                const reviews = await reviewsCollection
+                    .find({ mealId: new ObjectId(mealId) })
+                    .sort({ date: -1 }) // optional: show latest first
+                    .toArray();
+
+                res.send(reviews);
+            } catch (error) {
+                console.error("Failed to fetch reviews:", error);
+                res.status(500).send({ message: "Server error fetching reviews", error: error.message });
+            }
+        });
+
+
         //Create Reviews for meal and count review for meal
         app.post("/meals/:id/reviews", async (req, res) => {
             const mealId = req.params.id;
-            const { user, email, comment, rating } = req.body;
+            const { mealTitle, user, email, comment, rating } = req.body;
 
             if (!user || !email || !comment || rating == null) {
                 return res.status(400).send({ message: "Missing review fields" });
@@ -355,11 +377,12 @@ async function run() {
             try {
                 const review = {
                     mealId: new ObjectId(mealId),
+                    mealTitle,
                     user,
                     email,
                     comment,
                     rating: parseInt(rating),
-                    date: new Date().toISOString(),
+                    posted_at: new Date().toISOString(),
                 };
 
                 const result = await reviewsCollection.insertOne(review);
@@ -424,7 +447,7 @@ async function run() {
         });
 
 
-        // DELETE /-meals/:id
+        // DELETE meal from all meals collection /-meals/:id
         app.delete('/meals/:id', async (req, res) => {
             try {
                 const id = req.params.id;
@@ -438,6 +461,46 @@ async function run() {
                 res.status(500).send({ message: 'Failed to delete upcoming meal.' });
             }
         });
+
+
+
+        // Delete one review and decrement the reviews_count form meals collection
+
+        app.delete('/reviews/:id', async (req, res) => {
+            try {
+                const reviewId = req.params.id;
+
+                // Find the review to get associated meal_id
+                const review = await reviewsCollection.findOne({ _id: new ObjectId(reviewId) });
+
+                if (!review) {
+                    return res.status(404).send({ success: false, message: 'Review not found' });
+                }
+
+                // Delete the review
+                const deleteResult = await reviewsCollection.deleteOne({ _id: new ObjectId(reviewId) });
+
+                // If deletion successful, decrease the review count from the meal
+                if (deleteResult.deletedCount > 0) {
+                    await mealsCollection.updateOne(
+                        { _id: new ObjectId(review.mealId) },
+                        { $inc: { reviews_count: -1 } }
+                    );
+
+                    return res.send({
+                        success: true,
+                        message: 'Review deleted and meal review count updated',
+                    });
+                } else {
+                    return res.status(500).send({ success: false, message: 'Failed to delete review' });
+                }
+
+            } catch (error) {
+                console.error('Error deleting review:', error);
+                res.status(500).send({ success: false, message: 'Internal server error' });
+            }
+        });
+
 
 
 
