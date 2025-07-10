@@ -367,6 +367,24 @@ async function run() {
             }
         });
 
+        // Get all reviews of an user by user email
+
+        app.get("/reviews/user", async (req, res) => {
+            try {
+                const email = req.query.email;
+
+                if (!email) {
+                    return res.status(400).json({ message: "Email query is required." });
+                }
+
+                const reviews = await reviewsCollection.find({ email: email }).toArray();
+                res.status(200).json(reviews);
+            } catch (error) {
+                console.error("Error fetching user reviews:", error);
+                res.status(500).json({ message: "Server error while fetching reviews." });
+            }
+        });
+
 
         //Create Reviews for meal and count review for meal
         app.post("/meals/:id/reviews", async (req, res) => {
