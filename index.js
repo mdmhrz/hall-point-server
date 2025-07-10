@@ -514,7 +514,8 @@ async function run() {
         //****************************************/
 
 
-        // GET /meal-requests?mealId=xxx&userEmail=yyy
+        // GET specific meal request object thourgh email.
+        // /meal-requests?mealId=xxx&userEmail=yyy
         app.get('/meal-requests', async (req, res) => {
             const { mealId, userEmail } = req.query;
 
@@ -522,6 +523,20 @@ async function run() {
 
             res.send({ exists: !!exists });
         });
+
+
+        // GET all meal request object thourgh email.
+        // /meal-requests?mealId=xxx&userEmail=yyy
+        app.get('/meal-requests/user', async (req, res) => {
+            const email = req.query.email;
+
+            const result = await mealRequestsCollection.find({ userEmail: email }).toArray();
+
+            res.send(result);
+        });
+
+
+
 
         // GET /meal-requests?mealId=xxx&userEmail=yyy
         app.get('/meal-requests/all', async (req, res) => {
@@ -566,6 +581,7 @@ async function run() {
             res.send(result);
         });
 
+
         // Meals request status update api
         app.patch('/meal-requests/serve/:id', async (req, res) => {
             const { id } = req.params;
@@ -575,6 +591,25 @@ async function run() {
             );
             res.send(result);
         });
+
+
+        //// DELETE a meal request by ID
+        app.delete("/mealRequests/:id", async (req, res) => {
+            try {
+                const id = req.params.id;
+                const result = await mealRequestsCollection.deleteOne({ _id: new ObjectId(id) });
+
+                if (result.deletedCount > 0) {
+                    res.status(200).json({ message: "Meal request deleted" });
+                } else {
+                    res.status(404).json({ message: "Meal request not found" });
+                }
+            } catch (error) {
+                console.error("Error deleting meal request:", error);
+                res.status(500).json({ message: "Internal server error" });
+            }
+        });
+
 
 
 
