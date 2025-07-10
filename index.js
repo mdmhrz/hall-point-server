@@ -261,6 +261,22 @@ async function run() {
             res.send(result)
         })
 
+        // Get all meal data sorted by like review count
+        app.get('/meals/sorted', async (req, res) => {
+            try {
+                const meals = await mealsCollection
+                    .find()
+                    .sort({ likes: -1, reviews_count: -1 })
+                    .toArray();
+
+                res.send(meals);
+            } catch (error) {
+                console.error("Failed to fetch sorted meals:", error);
+                res.status(500).send({ message: "Internal server error" });
+            }
+        });
+
+
 
         //to get meal data by id
         // GET Meal by ID
@@ -298,6 +314,23 @@ async function run() {
                 res.status(500).send({ message: "Server error fetching reviews", error: error.message });
             }
         });
+
+        // get distributor meals by distributor email 
+        app.get('/meals/distributor/:email', async (req, res) => {
+            try {
+                const email = req.params.email;
+
+                const meals = await mealsCollection
+                    .find({ distributor_email: email })
+                    .toArray();
+
+                res.send(meals);
+            } catch (error) {
+                console.error("Error fetching meals by distributor:", error);
+                res.status(500).send({ message: "Internal Server Error" });
+            }
+        });
+
 
 
 
@@ -365,6 +398,47 @@ async function run() {
                 res.status(500).send({ message: "Failed to update like count", error: error.message });
             }
         });
+
+
+        //Update whole meal data 
+        app.patch('/meals/update/:id', async (req, res) => {
+            try {
+                const mealId = req.params.id;
+                const updateData = req.body;
+                console.log('meal id', mealId, 'updatedate', updateData);
+
+                const result = await mealsCollection.updateOne(
+                    { _id: new ObjectId(mealId) },
+                    { $set: updateData }
+                );
+
+                if (result.modifiedCount > 0) {
+                    res.send({ success: true, message: 'Meal updated successfully' });
+                } else {
+                    res.status(404).send({ success: false, message: 'Meal not found or already updated' });
+                }
+            } catch (error) {
+                console.error('Failed to update meal:', error);
+                res.status(500).send({ success: false, message: 'Internal server error' });
+            }
+        });
+
+
+        // DELETE /-meals/:id
+        app.delete('/meals/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const query = { _id: new ObjectId(id) };
+                console.log(query);
+
+                const result = await mealsCollection.deleteOne(query);
+                res.send(result);
+            } catch (error) {
+                console.error('Error deleting upcoming meal:', error);
+                res.status(500).send({ message: 'Failed to delete upcoming meal.' });
+            }
+        });
+
 
 
 
