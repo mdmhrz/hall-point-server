@@ -357,7 +357,7 @@ async function run() {
             try {
                 const reviews = await reviewsCollection
                     .find({ mealId: new ObjectId(mealId) })
-                    .sort({ date: -1 }) // optional: show latest first
+                    .sort({ posted_at: -1 }) // optional: show latest first
                     .toArray();
 
                 res.send(reviews);
