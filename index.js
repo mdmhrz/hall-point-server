@@ -319,6 +319,9 @@ async function run() {
 
 
 
+
+
+
         //To create new meal data
         app.post('/meals', async (req, res) => {
             const meal = req.body;
@@ -520,6 +523,32 @@ async function run() {
             res.send({ exists: !!exists });
         });
 
+        // GET /meal-requests?mealId=xxx&userEmail=yyy
+        app.get('/meal-requests/all', async (req, res) => {
+            const allrequest = await mealRequestsCollection.find().toArray();
+            res.send(allrequest);
+        });
+
+
+
+        // To implement search functionality in meal request 
+
+        app.get('/meal-requests/search', async (req, res) => {
+            const keyword = req.query.keyword;
+            const query = keyword
+                ? {
+                    $or: [
+                        { userEmail: { $regex: keyword, $options: "i" } },
+                        { userName: { $regex: keyword, $options: "i" } },
+                    ]
+                }
+                : {};
+
+            const requests = await mealRequestsCollection.find(query).toArray();
+            res.send(requests);
+        });
+
+
 
         // POST /meal-requests
         app.post('/meal-requests', async (req, res) => {
@@ -536,6 +565,24 @@ async function run() {
             const result = await mealRequestsCollection.insertOne(request);
             res.send(result);
         });
+
+        // Meals request status update api
+        app.patch('/meal-requests/serve/:id', async (req, res) => {
+            const { id } = req.params;
+            const result = await mealRequestsCollection.updateOne(
+                { _id: new ObjectId(id) },
+                { $set: { status: "on serving" } }
+            );
+            res.send(result);
+        });
+
+
+
+
+
+
+
+
 
 
         //****************************************/
