@@ -277,12 +277,26 @@ async function run() {
         // Get all meal data sorted by like review count
         app.get('/meals/sorted', async (req, res) => {
             try {
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 10;
+                const skip = (page - 1) * limit;
+
+                const totalCount = await mealsCollection.countDocuments();
+
                 const meals = await mealsCollection
                     .find()
                     .sort({ likes: -1, reviews_count: -1 })
+                    .skip(skip)
+                    .limit(limit)
                     .toArray();
 
-                res.send(meals);
+                res.send({
+                    totalCount,               // total items count
+                    page,
+                    limit,
+                    totalPages: Math.ceil(totalCount / limit),
+                    data: meals               // array of meals
+                });
             } catch (error) {
                 console.error("Failed to fetch sorted meals:", error);
                 res.status(500).send({ message: "Internal server error" });
