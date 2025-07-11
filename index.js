@@ -730,7 +730,8 @@ async function run() {
         });
 
 
-        // update like count
+
+        // Upcoming meals like count and if likes reach 10 it will publish and remove from upcoming meals collection.
         app.patch("/upcoming-meals/like/:id", async (req, res) => {
             const mealId = req.params.id;
             const userEmail = req.body.email;
@@ -746,13 +747,13 @@ async function run() {
                     return res.status(404).send({ success: false, message: "Meal not found" });
                 }
 
-                // Check if user already liked it
+                // Prevent duplicate likes
                 if (meal.liked_by?.includes(userEmail)) {
                     return res.status(400).send({ success: false, message: "You already liked this meal" });
                 }
 
-                // Add like and track user
-                const result = await upcomingMealsCollection.updateOne(
+                // Increment like and add user
+                await upcomingMealsCollection.updateOne(
                     { _id: new ObjectId(mealId) },
                     {
                         $inc: { likes: 1 },
@@ -760,12 +761,57 @@ async function run() {
                     }
                 );
 
-                res.send({ success: true, message: "Liked successfully", result });
+                // Fetch the updated meal manually
+                const updatedMeal = await upcomingMealsCollection.findOne({ _id: new ObjectId(mealId) });
+
+                if (!updatedMeal) {
+                    return res.status(500).send({ success: false, message: "Failed to retrieve updated meal." });
+                }
+
+                // If likes reach 10, publish it to meals collection
+                if (updatedMeal.likes >= 10) {
+                    const {
+                        _id,
+                        liked_by,
+                        status,
+                        ...rest
+                    } = updatedMeal;
+
+                    const mealToInsert = {
+                        ...rest,
+                        rating: 0,
+                        likes: 0,
+                        reviews_count: 0,
+                        posted_at: new Date(),
+                    };
+
+                    // Insert to main collection
+                    await mealsCollection.insertOne(mealToInsert);
+                    // Remove from upcoming
+                    await upcomingMealsCollection.deleteOne({ _id: new ObjectId(mealId) });
+
+                    return res.send({
+                        success: true,
+                        message: "Maximum likes reached! The meal is now live in the regular meals.",
+                        published: true
+                    });
+                }
+
+                // Normal success response if not yet published
+                res.send({
+                    success: true,
+                    message: "Liked successfully.",
+                    updatedLikes: updatedMeal.likes,
+                    published: false
+                });
+
             } catch (error) {
                 console.error("Like failed:", error);
                 res.status(500).send({ success: false, message: "Internal Server Error" });
             }
         });
+
+
 
 
         //Delete upcoming meals when its being published
