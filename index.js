@@ -97,6 +97,12 @@ async function run() {
         });
 
 
+
+
+
+
+
+
         //****************************************/
         //*******    User Related Api     ********/
         //****************************************/
@@ -114,6 +120,7 @@ async function run() {
             const result = await usersCollection.find().toArray();
             res.send(result)
         })
+
 
         // GET /users/search?keyword=xyz
         app.get("/users/search", async (req, res) => {
@@ -140,6 +147,7 @@ async function run() {
             }
         });
 
+
         // GET user role by email
         app.get("/users/role", async (req, res) => {
             try {
@@ -161,7 +169,6 @@ async function run() {
                 res.status(500).json({ error: "Internal server error" });
             }
         });
-
 
 
         //Add user in User Collection when a user register
@@ -206,6 +213,10 @@ async function run() {
                 res.status(500).json({ message: "Internal server error" });
             }
         });
+
+
+
+
 
 
 
@@ -255,11 +266,13 @@ async function run() {
             }
         });
 
+
         // get all meal without filtering
         app.get('/meals/all', async (req, res) => {
             const result = await mealsCollection.find().toArray();
             res.send(result)
         })
+
 
         // Get all meal data sorted by like review count
         app.get('/meals/sorted', async (req, res) => {
@@ -298,8 +311,6 @@ async function run() {
         });
 
 
-
-
         // get distributor meals by distributor email 
         app.get('/meals/distributor/:email', async (req, res) => {
             try {
@@ -317,11 +328,6 @@ async function run() {
         });
 
 
-
-
-
-
-
         //To create new meal data
         app.post('/meals', async (req, res) => {
             const meal = req.body;
@@ -330,13 +336,55 @@ async function run() {
             res.send(result)
         });
 
+        //Update whole meal data 
+        app.patch('/meals/update/:id', async (req, res) => {
+            try {
+                const mealId = req.params.id;
+                const updateData = req.body;
+                // console.log('meal id', mealId, 'updatedate', updateData);
+
+                const result = await mealsCollection.updateOne(
+                    { _id: new ObjectId(mealId) },
+                    { $set: updateData }
+                );
+
+                if (result.modifiedCount > 0) {
+                    res.send({ success: true, message: 'Meal updated successfully' });
+                } else {
+                    res.status(404).send({ success: false, message: 'Meal not found or already updated' });
+                }
+            } catch (error) {
+                console.error('Failed to update meal:', error);
+                res.status(500).send({ success: false, message: 'Internal server error' });
+            }
+        });
+
+
+        // DELETE meal from all meals collection /-meals/:id
+        app.delete('/meals/:id', async (req, res) => {
+            try {
+                const id = req.params.id;
+                const query = { _id: new ObjectId(id) };
+                console.log(query);
+
+                const result = await mealsCollection.deleteOne(query);
+                res.send(result);
+            } catch (error) {
+                console.error('Error deleting upcoming meal:', error);
+                res.status(500).send({ message: 'Failed to delete upcoming meal.' });
+            }
+        });
 
 
 
 
-        //****************************************/
+
+
+
+
+        //***************************************************/
         //*******    Review of meals Related Api     ********/
-        //****************************************/
+        //***************************************************/
 
         // get all review in an array
         app.get('/reviews', async (req, res) => {
@@ -367,8 +415,8 @@ async function run() {
             }
         });
 
-        // Get all reviews of an user by user email
 
+        // Get all reviews of an user by user email
         app.get("/reviews/user", async (req, res) => {
             try {
                 const email = req.query.email;
@@ -444,49 +492,31 @@ async function run() {
         });
 
 
-        //Update whole meal data 
-        app.patch('/meals/update/:id', async (req, res) => {
-            try {
-                const mealId = req.params.id;
-                const updateData = req.body;
-                console.log('meal id', mealId, 'updatedate', updateData);
+        // Update individual review by user 
+        app.patch('/reviews/:id', async (req, res) => {
+            const { id } = req.params;
+            const updatedData = req.body;
 
-                const result = await mealsCollection.updateOne(
-                    { _id: new ObjectId(mealId) },
-                    { $set: updateData }
+            try {
+                const result = await reviewsCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: updatedData }
                 );
 
                 if (result.modifiedCount > 0) {
-                    res.send({ success: true, message: 'Meal updated successfully' });
+                    res.status(200).json({ message: "Review updated successfully." });
                 } else {
-                    res.status(404).send({ success: false, message: 'Meal not found or already updated' });
+                    res.status(404).json({ message: "Review not found or no change made." });
                 }
             } catch (error) {
-                console.error('Failed to update meal:', error);
-                res.status(500).send({ success: false, message: 'Internal server error' });
-            }
-        });
-
-
-        // DELETE meal from all meals collection /-meals/:id
-        app.delete('/meals/:id', async (req, res) => {
-            try {
-                const id = req.params.id;
-                const query = { _id: new ObjectId(id) };
-                console.log(query);
-
-                const result = await mealsCollection.deleteOne(query);
-                res.send(result);
-            } catch (error) {
-                console.error('Error deleting upcoming meal:', error);
-                res.status(500).send({ message: 'Failed to delete upcoming meal.' });
+                console.error("Update review error:", error);
+                res.status(500).json({ message: "Server error while updating review." });
             }
         });
 
 
 
         // Delete one review and decrement the reviews_count form meals collection
-
         app.delete('/reviews/:id', async (req, res) => {
             try {
                 const reviewId = req.params.id;
@@ -527,6 +557,9 @@ async function run() {
 
 
 
+
+
+
         //****************************************/
         //*******    Meal Request Related Api     ********/
         //****************************************/
@@ -554,8 +587,6 @@ async function run() {
         });
 
 
-
-
         // GET /meal-requests?mealId=xxx&userEmail=yyy
         app.get('/meal-requests/all', async (req, res) => {
             const allrequest = await mealRequestsCollection.find().toArray();
@@ -580,7 +611,6 @@ async function run() {
             const requests = await mealRequestsCollection.find(query).toArray();
             res.send(requests);
         });
-
 
 
         // POST /meal-requests
@@ -701,7 +731,6 @@ async function run() {
 
 
         // update like count
-
         app.patch("/upcoming-meals/like/:id", async (req, res) => {
             const mealId = req.params.id;
             const userEmail = req.body.email;
@@ -759,6 +788,33 @@ async function run() {
 
 
 
+
+        //****************************************/
+        //*******   Payments Related Api   *******/
+        //****************************************/
+
+
+        //Get payment history by user email
+        //  GET /payments/user?email=user@mail.com
+        app.get('/payments/user', async (req, res) => {
+            const email = req.query.email;
+
+            if (!email) {
+                return res.status(400).json({ message: "Email is required." });
+            }
+
+            try {
+                const payments = await paymentsCollection
+                    .find({ email })
+                    .sort({ paid_at: -1 }) // latest payments first
+                    .toArray();
+
+                res.status(200).json(payments);
+            } catch (error) {
+                console.error("Error fetching payments:", error);
+                res.status(500).json({ message: "Failed to fetch payment history." });
+            }
+        });
 
 
 
