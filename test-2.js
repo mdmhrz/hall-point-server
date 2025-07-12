@@ -2,56 +2,20 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const cookieParser = require('cookie-parser')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-
+// const admin = require("firebase-admin");
 
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-
-const logger = (req, res, next) => {
-    console.log('inside the logger middleware');
-    next()
-}
-
-
-const verifyToken = (req, res, next) => {
-    try {
-        const token = req?.cookies?.token;
-        console.log('🔐 Token in middleware:', token);
-
-        if (!token) {
-            return res.status(401).send({ message: 'Unauthorized Access: No token' });
-        }
-
-        jwt.verify(token, process.env.JWT_ACCESS_SECRET, (err, decoded) => {
-            if (err) {
-                return res.status(403).send({ message: 'Forbidden: Invalid token' });
-            }
-
-            req.decoded = decoded; // e.g., { email, role }
-            next();
-        });
-    } catch (err) {
-        console.error('Token verification error:', err);
-        return res.status(500).send({ message: 'Internal Server Error' });
-    }
-};
-
-
-
-
-
 // Middlewares
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: 'http://localhost:5173/',
     credentials: true
 }));
 app.use(express.json());
-app.use(cookieParser())
 
 
 //MongoDB
@@ -79,39 +43,6 @@ async function run() {
         const reviewsCollection = db.collection("reviews");
         const paymentsCollection = db.collection("payments");
         const upcomingMealsCollection = db.collection("upcomingMeals");
-
-
-
-
-        //****************************************/
-        //*****    JWT token Related Api     *****/
-        //****************************************/
-        app.post('/jwt', async (req, res) => {
-            const userData = req.body;
-            const token = jwt.sign(userData, process.env.JWT_ACCESS_SECRET, { expiresIn: '1d' })
-
-            // set token in the cookies
-            res.cookie('token', token, {
-                httpOnly: true,
-                secure: false
-            })
-
-            res.send({ success: true });
-
-        })
-
-
-        app.post("/logout", (req, res) => {
-            res.clearCookie("token");
-            res.json({ message: "Logged out" });
-        });
-
-
-
-
-
-
-
 
 
         // payment 
@@ -169,10 +100,16 @@ async function run() {
             });
         });
 
+        //****************************************/
+        //*****    JWT token Related Api     *****/
+        //****************************************/
+        app.post('/jwt', async (req, res) => {
+            const { email } = req.body;
+            const user = { email }
+            const token = jwt.sign(user, 'secret', { expiresIn: '1h' })
+            res.send({ token })
 
-
-
-
+        })
 
 
 
@@ -302,6 +239,7 @@ async function run() {
         //****************************************/
 
         // app.get('/meals/all')
+
         app.get('/meals', async (req, res) => {
             const page = parseInt(req.query.page) || 0;
             const limit = parseInt(req.query.limit) || 6;
@@ -454,7 +392,7 @@ async function run() {
             try {
                 const id = req.params.id;
                 const query = { _id: new ObjectId(id) };
-                // console.log(query);
+                console.log(query);
 
                 const result = await mealsCollection.deleteOne(query);
                 res.send(result);
@@ -519,15 +457,9 @@ async function run() {
 
 
         // Get all reviews of an user by user email
-        app.get("/reviews/user", verifyToken, async (req, res) => {
+        app.get("/reviews/user", async (req, res) => {
             try {
                 const email = req.query.email;
-
-                if (email !== req.query.email) {
-                    return res.status(403).send({ message: 'Forbidden access' })
-                }
-
-
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 10;
                 const skip = (page - 1) * limit;
