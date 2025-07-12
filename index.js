@@ -403,13 +403,26 @@ async function run() {
         // get all review in an array
         app.get('/reviews', async (req, res) => {
             try {
-                const reviews = await reviewsCollection.find().toArray();
-                res.send(reviews);
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 10;
+                const skip = (page - 1) * limit;
+
+                const reviewsCursor = reviewsCollection.find().skip(skip).limit(limit);
+                const totalReviews = await reviewsCollection.estimatedDocumentCount();
+                const reviews = await reviewsCursor.toArray();
+
+                res.send({
+                    reviews,
+                    total: totalReviews,
+                    page,
+                    limit,
+                });
             } catch (error) {
                 console.error("Failed to fetch reviews:", error);
                 res.status(500).send({ message: "Internal server error" });
             }
         });
+
 
 
         //Get Reviews by Meal Id
@@ -603,27 +616,64 @@ async function run() {
 
         // GET /meal-requests?mealId=xxx&userEmail=yyy
         app.get('/meal-requests/all', async (req, res) => {
-            const allrequest = await mealRequestsCollection.find().toArray();
-            res.send(allrequest);
+            try {
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 10;
+                const skip = (page - 1) * limit;
+
+                const total = await mealRequestsCollection.countDocuments();
+                const requests = await mealRequestsCollection
+                    .find()
+                    .skip(skip)
+                    .limit(limit)
+                    .toArray();
+
+                res.send({
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit),
+                    data: requests
+                });
+            } catch (error) {
+                console.error("Failed to fetch meal requests:", error);
+                res.status(500).send({ message: "Server error" });
+            }
         });
+
 
 
 
         // To implement search functionality in meal request 
 
         app.get('/meal-requests/search', async (req, res) => {
-            const keyword = req.query.keyword;
-            const query = keyword
-                ? {
-                    $or: [
-                        { userEmail: { $regex: keyword, $options: "i" } },
-                        { userName: { $regex: keyword, $options: "i" } },
-                    ]
-                }
-                : {};
+            try {
+                const keyword = req.query.keyword || "";
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 10;
+                const skip = (page - 1) * limit;
 
-            const requests = await mealRequestsCollection.find(query).toArray();
-            res.send(requests);
+                const query = {
+                    userEmail: { $regex: keyword, $options: "i" },
+                };
+
+                const total = await mealRequestsCollection.countDocuments(query);
+                const requests = await mealRequestsCollection
+                    .find(query)
+                    .skip(skip)
+                    .limit(limit)
+                    .toArray();
+
+                res.send({
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit),
+                    data: requests
+                });
+            } catch (err) {
+                res.status(500).send({ message: "Search error", error: err.message });
+            }
         });
 
 
@@ -702,17 +752,32 @@ async function run() {
 
         app.get("/upcoming-meals/sorted", async (req, res) => {
             try {
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 10;
+                const skip = (page - 1) * limit;
+
+                const totalMeals = await upcomingMealsCollection.countDocuments();
+
                 const upcomingMeals = await upcomingMealsCollection
                     .find()
-                    .sort({ likes: -1 })          // sort by likes descending
+                    .sort({ likes: -1 }) // Sort by likes descending
+                    .skip(skip)
+                    .limit(limit)
                     .toArray();
 
-                res.status(200).json(upcomingMeals);
+                res.status(200).json({
+                    total: totalMeals,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(totalMeals / limit),
+                    data: upcomingMeals,
+                });
             } catch (error) {
                 console.error("Failed to fetch sorted upcoming meals:", error);
                 res.status(500).json({ message: "Server error while fetching meals" });
             }
         });
+
 
 
         // new upcoming meals post
