@@ -12,16 +12,11 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 
-const logger = (req, res, next) => {
-    console.log('inside the logger middleware');
-    next()
-}
-
 
 const verifyToken = (req, res, next) => {
     try {
         const token = req?.cookies?.token;
-        console.log('🔐 Token in middleware:', token);
+        // console.log('Token in middleware:', token);
 
         if (!token) {
             return res.status(401).send({ message: 'Unauthorized Access: No token' });
@@ -33,6 +28,7 @@ const verifyToken = (req, res, next) => {
             }
 
             req.decoded = decoded; // e.g., { email, role }
+            // console.log(decoded);
             next();
         });
     } catch (err) {
@@ -41,6 +37,39 @@ const verifyToken = (req, res, next) => {
     }
 };
 
+
+
+const verifyRole = (allowedRoles) => {
+    return async (req, res, next) => {
+        try {
+            const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+            const email = req.decoded?.email;
+            console.log(roles);
+
+            if (!email) {
+                return res.status(401).send({ message: 'Unauthorized: Missing email in token' });
+            }
+
+            const db = client.db('hallPointDB');
+            const usersCollection = db.collection('users');
+
+            const user = await usersCollection.findOne({ email });
+
+            if (!user) {
+                return res.status(404).send({ message: 'User not found' });
+            }
+
+            if (!roles.includes(user.role)) {
+                return res.status(403).send({ message: 'Access Denied: Role restricted' });
+            }
+
+            next();
+        } catch (error) {
+            console.error('Role check error:', error);
+            return res.status(500).send({ message: 'Internal Server Error' });
+        }
+    };
+};
 
 
 
@@ -519,14 +548,9 @@ async function run() {
 
 
         // Get all reviews of an user by user email
-        app.get("/reviews/user", verifyToken, async (req, res) => {
+        app.get("/reviews/user", verifyToken, verifyRole('admin'), async (req, res) => {
             try {
                 const email = req.query.email;
-
-                if (email !== req.query.email) {
-                    return res.status(403).send({ message: 'Forbidden access' })
-                }
-
 
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 10;
