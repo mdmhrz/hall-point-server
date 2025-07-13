@@ -80,7 +80,7 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
-app.use(cookieParser())
+app.use(cookieParser());
 
 
 //MongoDB
@@ -213,7 +213,7 @@ async function run() {
         //****************************************/
 
         //get specific user by email
-        app.get('/users', async (req, res) => {
+        app.get('/users', verifyToken, async (req, res) => {
             const email = req.query.email;
             const result = await usersCollection.findOne({ email });
             res.send(result)
@@ -221,14 +221,14 @@ async function run() {
 
 
         //to get all users
-        app.get('/users/all', async (req, res) => {
-            const result = await usersCollection.find().toArray();
-            res.send(result)
-        })
+        // app.get('/users/all', async (req, res) => {
+        //     const result = await usersCollection.find().toArray();
+        //     res.send(result)
+        // })
 
 
         // GET /users/search?keyword=xyz
-        app.get("/users/search", async (req, res) => {
+        app.get("/users/search", verifyToken, verifyRole('admin'), async (req, res) => {
             try {
                 const keyword = req.query.keyword?.trim();
 
@@ -253,8 +253,37 @@ async function run() {
         });
 
 
+
+        // Pagination Result in admin manager users search keyword
+
+        // GET /users/search?keyword=xyz
+        app.get('/users/manageUsers', verifyToken, verifyRole('admin'), async (req, res) => {
+            try {
+                const keyword = req.query.keyword || "";
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 10;
+                const skip = (page - 1) * limit;
+
+                const query = {
+                    $or: [
+                        { name: { $regex: keyword, $options: "i" } },
+                        { email: { $regex: keyword, $options: "i" } }
+                    ]
+                };
+
+                const users = await usersCollection.find(query).skip(skip).limit(limit).toArray();
+                const total = await usersCollection.countDocuments(query);
+
+                res.send({ users, total });
+            } catch (error) {
+                console.error("Search error:", error);
+                res.status(500).send({ message: "Internal Server Error" });
+            }
+        });
+
+
         // GET user role by email
-        app.get("/users/role", async (req, res) => {
+        app.get("/users/role", verifyToken, async (req, res) => {
             try {
                 const email = req.query.email;
 
@@ -368,7 +397,7 @@ async function run() {
                 console.error(err);
                 res.status(500).send({ message: 'Error fetching meals' });
             }
-        });
+        }); 1
 
 
         // get all meal without filtering
@@ -379,7 +408,7 @@ async function run() {
 
 
         // Get all meal data sorted by like review count
-        app.get('/meals/sorted', async (req, res) => {
+        app.get('/meals/sorted', verifyToken, verifyRole('admin'), async (req, res) => {
             try {
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 10;
@@ -430,7 +459,7 @@ async function run() {
 
 
         // get distributor meals by distributor email 
-        app.get('/meals/distributor/:email', async (req, res) => {
+        app.get('/meals/distributor/:email', verifyToken, verifyRole('admin'), async (req, res) => {
             try {
                 const email = req.params.email;
 
@@ -505,7 +534,7 @@ async function run() {
         //***************************************************/
 
         // get all review in an array
-        app.get('/reviews', async (req, res) => {
+        app.get('/reviews', verifyToken, verifyRole('admin'), async (req, res) => {
             try {
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 10;
@@ -548,7 +577,7 @@ async function run() {
 
 
         // Get all reviews of an user by user email
-        app.get("/reviews/user", verifyToken, verifyRole('admin'), async (req, res) => {
+        app.get("/reviews/user", verifyToken, verifyRole('user'), async (req, res) => {
             try {
                 const email = req.query.email;
 
