@@ -7,7 +7,6 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 
-
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -36,7 +35,6 @@ const verifyToken = (req, res, next) => {
         return res.status(500).send({ message: 'Internal Server Error' });
     }
 };
-
 
 
 const verifyRole = (allowedRoles) => {
@@ -253,9 +251,7 @@ async function run() {
         });
 
 
-
         // Pagination Result in admin manager users search keyword
-
         // GET /users/search?keyword=xyz
         app.get('/users/manageUsers', verifyToken, verifyRole('admin'), async (req, res) => {
             try {
@@ -353,8 +349,6 @@ async function run() {
 
 
 
-
-
         //****************************************/
         //*******    Meals Related Api     ********/
         //****************************************/
@@ -435,7 +429,6 @@ async function run() {
                 res.status(500).send({ message: "Internal server error" });
             }
         });
-
 
 
         //to get meal data by id
@@ -557,8 +550,8 @@ async function run() {
         });
 
 
-
         //Get Reviews by Meal Id
+        // this is open api
         app.get("/meals/:id/reviews", async (req, res) => {
             const mealId = req.params.id;
 
@@ -609,7 +602,6 @@ async function run() {
                 res.status(500).json({ message: "Server error while fetching reviews." });
             }
         });
-
 
 
         //Create Reviews for meal and count review for meal
@@ -693,7 +685,6 @@ async function run() {
         });
 
 
-
         // Delete one review and decrement the reviews_count form meals collection
         app.delete('/reviews/:id', async (req, res) => {
             try {
@@ -745,18 +736,17 @@ async function run() {
 
         // GET specific meal request object thourgh email.
         // /meal-requests?mealId=xxx&userEmail=yyy
-        app.get('/meal-requests', async (req, res) => {
+        app.get('/meal-requests', verifyToken, async (req, res) => {
             const { mealId, userEmail } = req.query;
-
             const exists = await mealRequestsCollection.findOne({ mealId, userEmail });
-
             res.send({ exists: !!exists });
         });
 
 
         // GET all meal request object thourgh email.
         // /meal-requests?mealId=xxx&userEmail=yyy
-        app.get('/meal-requests/user', async (req, res) => {
+        // this api only use User
+        app.get('/meal-requests/user', verifyToken, verifyRole('user'), async (req, res) => {
             try {
                 const email = req.query.email;
                 const page = parseInt(req.query.page) || 1;
@@ -786,9 +776,9 @@ async function run() {
         });
 
 
-
         // GET /meal-requests?mealId=xxx&userEmail=yyy
-        app.get('/meal-requests/all', async (req, res) => {
+        // THis api only use admin
+        app.get('/meal-requests/all', verifyToken, verifyRole('admin'), async (req, res) => {
             try {
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 10;
@@ -815,11 +805,9 @@ async function run() {
         });
 
 
-
-
         // To implement search functionality in meal request 
-
-        app.get('/meal-requests/search', async (req, res) => {
+        // This API only use Admin 
+        app.get('/meal-requests/search', verifyToken, verifyRole('admin'), async (req, res) => {
             try {
                 const keyword = req.query.keyword || "";
                 const page = parseInt(req.query.page) || 1;
@@ -902,15 +890,11 @@ async function run() {
 
 
 
-
-
-
         //****************************************/
         //*******    Upcoming Meals Related Api     ********/
         //****************************************/
 
-        //Get all upcoming meals
-
+        //Get all upcoming meals (this this open api, no need to implement JWT)
         app.get("/upcoming-meals", async (req, res) => {
             try {
                 const upcomingMeals = await upcomingMealsCollection.find().toArray();
@@ -921,9 +905,9 @@ async function run() {
             }
         });
 
-        //Get upcoming meals sorted by likes count
 
-        app.get("/upcoming-meals/sorted", async (req, res) => {
+        //Get upcoming meals sorted by likes count
+        app.get("/upcoming-meals/sorted", verifyToken, verifyRole('admin'), async (req, res) => {
             try {
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 10;
@@ -950,7 +934,6 @@ async function run() {
                 res.status(500).json({ message: "Server error while fetching meals" });
             }
         });
-
 
 
         // new upcoming meals post
@@ -980,7 +963,6 @@ async function run() {
                 res.status(500).json({ message: "Server error while adding upcoming meal" });
             }
         });
-
 
 
         // Upcoming meals like count and if likes reach 10 it will publish and remove from upcoming meals collection.
@@ -1064,8 +1046,6 @@ async function run() {
         });
 
 
-
-
         //Delete upcoming meals when its being published
         // DELETE /upcoming-meals/:id
         app.delete('/upcoming-meals/:id', async (req, res) => {
@@ -1094,7 +1074,7 @@ async function run() {
 
         //Get payment history by user email
         //  GET /payments/user?email=user@mail.com
-        app.get('/payments/user', async (req, res) => {
+        app.get('/payments/user', verifyToken, verifyRole('user'), async (req, res) => {
             const email = req.query.email;
             const page = parseInt(req.query.page) || 1;
             const limit = parseInt(req.query.limit) || 10;
@@ -1121,11 +1101,6 @@ async function run() {
                 res.status(500).json({ message: "Failed to fetch payment history." });
             }
         });
-
-
-
-
-
 
 
 
