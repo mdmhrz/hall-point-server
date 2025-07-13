@@ -87,7 +87,7 @@ const uri = process.env.MONGO_URI;
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
-        strict: true,
+        strict: false,
         deprecationErrors: true,
     }
 });
@@ -106,6 +106,65 @@ async function run() {
         const reviewsCollection = db.collection("reviews");
         const paymentsCollection = db.collection("payments");
         const upcomingMealsCollection = db.collection("upcomingMeals");
+
+
+
+
+        // Drop existing text index by name
+        // await mealsCollection.dropIndex("title_text_category_text_cuisine_text_ingredients_text_description_text"); // or whatever the existing index name is
+
+        // Then create your new compound text index
+        await mealsCollection.createIndex({
+            title: "text",
+            category: "text",
+            cuisine: "text",
+            ingredients: "text",
+            description: "text"
+        });
+
+
+        console.log("✅ Indexes created");
+
+        // ✅ Search API
+        app.get("/api/search", async (req, res) => {
+            const { query } = req.query;
+
+            if (!query || query.trim() === "") {
+                return res.status(400).json({ error: "Query is required" });
+            }
+
+            try {
+                // First try full-text search
+                let meals = await mealsCollection
+                    .find({ $text: { $search: query } })
+                    .limit(10)
+                    .toArray();
+
+                // If no results, fallback to partial regex search
+                if (meals.length === 0) {
+                    const regex = new RegExp(query, "i"); // case-insensitive
+
+                    meals = await mealsCollection
+                        .find({
+                            $or: [
+                                { title: regex },
+                                { category: regex },
+                                { cuisine: regex },
+                                { ingredients: regex },
+                                { description: regex },
+                            ],
+                        })
+                        .limit(10)
+                        .toArray();
+                }
+
+                res.json({ meals });
+            } catch (err) {
+                console.error("Search error:", err);
+                res.status(500).json({ error: "Search failed" });
+            }
+        });
+
 
 
 
