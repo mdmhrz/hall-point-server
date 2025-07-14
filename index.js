@@ -74,7 +74,7 @@ const verifyRole = (allowedRoles) => {
 
 // Middlewares
 app.use(cors({
-    origin: 'http://localhost:5173',
+    origin: ['http://localhost:5173', 'https://hall-point.web.app'],
     credentials: true
 }));
 app.use(express.json());
