@@ -108,12 +108,103 @@ async function run() {
         const upcomingMealsCollection = db.collection("upcomingMeals");
 
 
+        //---------- Users Dashboard overview api ----------//
+        app.get("/api/user-dashboard-overview", async (req, res) => {
+            try {
+                const email = req.query.email;
+
+                const [
+                    totalMeals,
+                    mealRequests,
+                    pendingRequests,
+                    reviews,
+                    payments
+                ] = await Promise.all([
+                    mealsCollection.countDocuments({ distributor_email: email }),
+                    mealRequestsCollection.countDocuments({ userEmail: email }),
+                    mealRequestsCollection.countDocuments({ userEmail: email, status: "pending" }),
+                    reviewsCollection.countDocuments({ email }),
+                    paymentsCollection.find({ email }).toArray(),
+                ]);
+
+                const categoryCounts = await mealRequestsCollection.aggregate([
+                    { $match: { userEmail: email } },
+                    { $addFields: { mealObjectId: { $toObjectId: "$mealId" } } },
+                    {
+                        $lookup: {
+                            from: "meals",
+                            localField: "mealObjectId",
+                            foreignField: "_id",
+                            as: "meal"
+                        }
+                    },
+                    { $unwind: "$meal" },
+                    {
+                        $group: {
+                            _id: "$meal.category",
+                            count: { $sum: 1 }
+                        }
+                    }
+                ]).toArray();
+
+                const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
+
+                res.json({
+                    totalMeals,
+                    mealRequests,
+                    pendingRequests,
+                    reviewCount: reviews,
+                    totalPaid,
+                    categoryDistribution: categoryCounts
+                });
+            } catch (error) {
+                console.error("Dashboard overview error:", error);
+                res.status(500).json({ error: "Failed to load dashboard data" });
+            }
+        });
 
 
-        // Drop existing text index by name
-        // await mealsCollection.dropIndex("title_text_category_text_cuisine_text_ingredients_text_description_text"); // or whatever the existing index name is
 
-        // Then create your new compound text index
+
+
+        //---------- admin dashboard overview ------- //
+
+        app.get("/api/admin-dashboard-overview", async (req, res) => {
+            const [totalMeals, upcomingMeals, pendingRequests, totalUsers, totalReviews, payments] = await Promise.all([
+                mealsCollection.countDocuments(),
+                upcomingMealsCollection.countDocuments(),
+                mealRequestsCollection.countDocuments({ status: "pending" }),
+                usersCollection.countDocuments(),
+                reviewsCollection.countDocuments(),
+                paymentsCollection.find({}).toArray()
+            ]);
+
+            const categoryCounts = await mealsCollection.aggregate([
+                { $group: { _id: "$category", count: { $sum: 1 } } }
+            ]).toArray();
+
+            const totalRevenue = payments.reduce((acc, p) => acc + p.amount, 0);
+
+            res.json({
+                totalMeals,
+                upcomingMeals,
+                pendingRequests,
+                totalUsers,
+                totalReviews,
+                totalRevenue,
+                categoryDistribution: categoryCounts
+            });
+        });
+
+
+
+
+
+
+
+
+        // ------------------//
+
         await mealsCollection.createIndex({
             title: "text",
             category: "text",
@@ -123,8 +214,7 @@ async function run() {
         });
 
 
-        console.log("✅ Indexes created");
-
+        // Search in banner api
         // ✅ Search API
         app.get("/api/search", async (req, res) => {
             const { query } = req.query;
