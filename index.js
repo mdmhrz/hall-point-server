@@ -7,8 +7,21 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 
+
+
 const app = express();
 const port = process.env.PORT || 5000;
+
+
+// Middlewares
+app.use(cors({
+    origin: ['https://hall-point.web.app', 'http://localhost:5173'],
+    credentials: true
+}));
+
+app.use(express.json());
+app.use(cookieParser());
+
 
 
 
@@ -16,6 +29,7 @@ const verifyToken = (req, res, next) => {
     try {
         const token = req?.cookies?.token;
         // console.log('Token in middleware:', token);
+        console.log(token);
 
         if (!token) {
             return res.status(401).send({ message: 'Unauthorized Access: No token' });
@@ -42,7 +56,7 @@ const verifyRole = (allowedRoles) => {
         try {
             const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
             const email = req.decoded?.email;
-            console.log(roles);
+            // console.log(roles);
 
             if (!email) {
                 return res.status(401).send({ message: 'Unauthorized: Missing email in token' });
@@ -72,13 +86,6 @@ const verifyRole = (allowedRoles) => {
 
 
 
-// Middlewares
-app.use(cors({
-    origin: ['http://localhost:5173', 'https://hall-point.web.app'],
-    credentials: true
-}));
-app.use(express.json());
-app.use(cookieParser());
 
 
 //MongoDB
@@ -87,7 +94,7 @@ const uri = process.env.MONGO_URI;
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
-        strict: false,
+        strict: true,
         deprecationErrors: true,
     }
 });
@@ -106,6 +113,54 @@ async function run() {
         const reviewsCollection = db.collection("reviews");
         const paymentsCollection = db.collection("payments");
         const upcomingMealsCollection = db.collection("upcomingMeals");
+
+
+
+        //****************************************/
+        //*****    JWT token Related Api     *****/
+        //****************************************/
+        app.post('/jwt', async (req, res) => {
+            const userData = req.body;
+            const token = jwt.sign(userData, process.env.JWT_ACCESS_SECRET, { expiresIn: '1d' })
+
+            // // set token in the cookies
+            // res.cookie('token', token, {
+            //     httpOnly: true,
+            //     secure: false
+            // })
+
+            // res.send({ success: true });
+
+            res
+                .cookie('token', token, {
+                    httpOnly: true,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+                })
+                .send({ success: true })
+
+        })
+
+
+        app.post("/logout", (req, res) => {
+            // res.clearCookie("token");
+            // res.json({ message: "Logged out" });
+            res
+                .clearCookie('token', {
+                    maxAge: 0,
+                    secure: process.env.NODE_ENV === 'production',
+                    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+                })
+                .send({ success: true })
+
+
+        });
+
+
+
+
+
+
 
 
         //---------- Users Dashboard overview api ----------//
@@ -205,13 +260,13 @@ async function run() {
 
         // ------------------//
 
-        await mealsCollection.createIndex({
-            title: "text",
-            category: "text",
-            cuisine: "text",
-            ingredients: "text",
-            description: "text"
-        });
+        // await mealsCollection.createIndex({
+        //     title: "text",
+        //     category: "text",
+        //     cuisine: "text",
+        //     ingredients: "text",
+        //     description: "text"
+        // });
 
 
         // Search in banner api
@@ -258,29 +313,6 @@ async function run() {
 
 
 
-
-        //****************************************/
-        //*****    JWT token Related Api     *****/
-        //****************************************/
-        app.post('/jwt', async (req, res) => {
-            const userData = req.body;
-            const token = jwt.sign(userData, process.env.JWT_ACCESS_SECRET, { expiresIn: '1d' })
-
-            // set token in the cookies
-            res.cookie('token', token, {
-                httpOnly: true,
-                secure: false
-            })
-
-            res.send({ success: true });
-
-        })
-
-
-        app.post("/logout", (req, res) => {
-            res.clearCookie("token");
-            res.json({ message: "Logged out" });
-        });
 
 
 
@@ -471,7 +503,7 @@ async function run() {
                 const userId = req.params.id;
                 const { role } = req.body;
 
-                console.log(role);
+                // console.log(role);
 
                 if (!role || !["admin", "user"].includes(role)) {
                     return res.status(400).json({ message: "Invalid or missing role." });
@@ -505,7 +537,7 @@ async function run() {
         // app.get('/meals/all')
         app.get('/meals', async (req, res) => {
             const page = parseInt(req.query.page) || 0;
-            const limit = parseInt(req.query.limit) || 6;
+            const limit = parseInt(req.query.limit) || 10;
             const search = req.query.search || '';
             const category = req.query.category || '';
             const priceRange = req.query.priceRange || '';
@@ -620,7 +652,7 @@ async function run() {
         //To create new meal data
         app.post('/meals', async (req, res) => {
             const meal = req.body;
-            console.log(meal);
+            // console.log(meal);
             const result = await mealsCollection.insertOne(meal);
             res.send(result)
         });
@@ -1201,7 +1233,7 @@ async function run() {
             try {
                 const id = req.params.id;
                 const query = { _id: new ObjectId(id) };
-                console.log(query);
+                // console.log(query);
 
                 const result = await upcomingMealsCollection.deleteOne(query);
                 res.send(result);
