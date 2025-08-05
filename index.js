@@ -253,13 +253,7 @@ async function run() {
 
 
 
-
-
-
-
-
         // ------------------//
-
         // await mealsCollection.createIndex({
         //     title: "text",
         //     category: "text",
@@ -270,7 +264,47 @@ async function run() {
 
 
         // Search in banner api
-        // ✅ Search API
+        // app.get("/api/search", async (req, res) => {
+        //     const { query } = req.query;
+
+        //     if (!query || query.trim() === "") {
+        //         return res.status(400).json({ error: "Query is required" });
+        //     }
+
+        //     try {
+        //         // First try full-text search
+        //         let meals = await mealsCollection
+        //             .find({ $text: { $search: query } })
+        //             .limit(10)
+        //             .toArray();
+
+        //         // If no results, fallback to partial regex search
+        //         if (meals.length === 0) {
+        //             const regex = new RegExp(query, "i"); // case-insensitive
+
+        //             meals = await mealsCollection
+        //                 .find({
+        //                     $or: [
+        //                         { title: regex },
+        //                         { category: regex },
+        //                         { cuisine: regex },
+        //                         { ingredients: regex },
+        //                         { description: regex },
+        //                     ],
+        //                 })
+        //                 .limit(10)
+        //                 .toArray();
+        //         }
+
+        //         res.json({ meals });
+        //     } catch (err) {
+        //         console.error("Search error:", err);
+        //         res.status(500).json({ error: "Search failed" });
+        //     }
+        // });
+
+        
+
         app.get("/api/search", async (req, res) => {
             const { query } = req.query;
 
@@ -279,16 +313,15 @@ async function run() {
             }
 
             try {
-                // First try full-text search
+                const regex = new RegExp(query, "i");
+
+                // Search meals
                 let meals = await mealsCollection
                     .find({ $text: { $search: query } })
                     .limit(10)
                     .toArray();
 
-                // If no results, fallback to partial regex search
                 if (meals.length === 0) {
-                    const regex = new RegExp(query, "i"); // case-insensitive
-
                     meals = await mealsCollection
                         .find({
                             $or: [
@@ -303,12 +336,27 @@ async function run() {
                         .toArray();
                 }
 
-                res.json({ meals });
+                // Search upcoming meals
+                const upcomingMeals = await upcomingMealsCollection
+                    .find({
+                        $or: [
+                            { title: regex },
+                            { type: regex },
+                            { description: regex }
+                        ],
+                    })
+                    .limit(10)
+                    .toArray();
+
+                res.json({ meals, upcomingMeals });
             } catch (err) {
                 console.error("Search error:", err);
                 res.status(500).json({ error: "Search failed" });
             }
         });
+
+
+
 
 
 
