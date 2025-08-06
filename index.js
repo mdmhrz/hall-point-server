@@ -21,6 +21,7 @@ app.use(cors({
 
 app.use(express.json());
 app.use(cookieParser());
+app.use(express.urlencoded())
 
 
 
@@ -303,7 +304,7 @@ async function run() {
         //     }
         // });
 
-        
+
 
         app.get("/api/search", async (req, res) => {
             const { query } = req.query;
@@ -366,11 +367,12 @@ async function run() {
 
 
 
+        //****************************************/
+        //*****    Payment Related Api     *******/
+        //****************************************/
 
 
-
-
-        // payment 
+        // Stripe payment 
 
         // for payment confirmation from stripe
         app.post('/create-payment-intent', async (req, res) => {
@@ -424,6 +426,149 @@ async function run() {
                 insertdId: insertResult.insertedId
             });
         });
+
+
+
+        //SSL Commerz Payment
+        //Step- 1.00:
+        app.post('/create-ssl-payment', async (req, res) => {
+            const payment = req.body;
+            // console.log('payment info', payment);
+
+            // Create a transaction ID
+            const trxid = new ObjectId().toString();
+
+
+            const paymentEntry = {
+                ...payment,
+                transactionId: trxid,
+                status: 'pending',
+                paid_at: new Date(),
+                paymentMethod: [],
+            };
+
+            // console.log(paymentEntry);
+
+
+            //Step- 01.01: Initilize payment
+            // Prepare Initiate Payment Payload
+            const initiate = {
+                store_id: process.env.SSL_STORE_ID,
+                store_passwd: process.env.SSL_STORE_PASSWORD,
+                total_amount: payment.amount,
+                currency: 'BDT',
+                tran_id: trxid,
+                success_url: 'http://localhost:5000/success-payment',
+                fail_url: 'http://localhost:5000/payment-fail',
+                cancel_url: `http://localhost:5000/payment-cancel`,
+                ipn_url: 'http://localhost:5000/ipn-success-payment',
+                shipping_method: 'Courier',
+                product_name: 'Computer',
+                product_category: 'Electronic',
+                product_profile: 'general',
+                cus_name: 'Customer Name',
+                cus_email: payment.email,
+                cus_add1: 'Dhaka',
+                cus_add2: 'Dhaka',
+                cus_city: 'Dhaka',
+                cus_state: 'Dhaka',
+                cus_postcode: '1000',
+                cus_country: 'Bangladesh',
+                cus_phone: '01711111111',
+                cus_fax: '01711111111',
+                ship_name: 'Customer Name',
+                ship_add1: 'Dhaka',
+                ship_add2: 'Dhaka',
+                ship_city: 'Dhaka',
+                ship_state: 'Dhaka',
+                ship_postcode: 1000,
+                ship_country: 'Bangladesh',
+            };
+
+            try {
+                //Step- 01.02 send a request to sslcommerz payment gateway
+                // Correct way to send x-www-form-urlencoded data
+                const iniResponse = await fetch('https://sandbox.sslcommerz.com/gwprocess/v4/api.php', {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": 'application/x-www-form-urlencoded'
+                    },
+                    body: new URLSearchParams(initiate).toString()
+                });
+                const responseData = await iniResponse.json();
+
+                //Step- 01.03 Get the URL for payment
+                const gatewayURL = responseData?.GatewayPageURL
+
+
+                //Save data to DB
+                const saveData = await paymentsCollection.insertOne(paymentEntry)
+
+                //Step- 01.04 Redirect to client side to the gateway 
+                res.send({ gatewayURL })
+
+            } catch (error) {
+                console.error('SSL Init Error:', error);
+                res.status(500).send({ error: 'Payment initialization failed' });
+            }
+        });
+
+
+        //Step- 02.00:
+        app.post('/success-payment', async (req, res) => {
+            //Step- 2.01; get the success payment data
+            //Success Payment Data
+            const paymentSuccess = req.body;
+
+            try {
+                //Step- 02.02 Validation data from SSLCOMMERZ is really payment paid or not
+                //Validation
+                const validationUrl = `https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php?val_id=${paymentSuccess.val_id}&store_id=${process.env.SSL_STORE_ID}&store_passwd=${process.env.SSL_STORE_PASSWORD}&v=1&format=json`;
+
+                const isValidPayment = await fetch(validationUrl);
+                const response = await isValidPayment.json();
+
+                // console.log('Validated Payment Response:', response);
+
+                if (response.status !== 'VALID') {
+                    return res.send({ message: 'Invalid Payment' })
+                    // console.log('Payment is valid');
+                }
+
+                //Step: 02.03 Update the payment data to database
+                //Update Payment Status in Database
+                const query = { transactionId: response.tran_id }
+                const updatePayment = await paymentsCollection.updateOne(query, {
+                    $set: {
+                        status: 'success',
+                        paymentMethod: [response.card_type],
+                        paid_at: new Date(response.tran_date).toISOString()
+                    }
+                })
+
+                // console.log('updatePayment', updatePayment);
+
+                //Step 02.04 Finally reidrect user to success payment destination
+                res.redirect('http://localhost:5173/dashboard/payment-history')
+
+            } catch (error) {
+                console.error('Payment validation error:', error);
+                res.status(500).send({
+                    success: false,
+                    message: 'Payment validation failed'
+                });
+            }
+        });
+
+        app.post('/payment-fail', (req, res) => {
+            res.redirect('http://localhost:5173/payment-fail');
+        });
+
+        app.post('/payment-cancel', (req, res) => {
+            res.redirect('http://localhost:5173/payment-cancel');
+        });
+
+
 
 
 
